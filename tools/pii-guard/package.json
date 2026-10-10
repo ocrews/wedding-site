@@ -1,0 +1,11 @@
+{
+  "name": "@wedding/pii-guard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CI guard: fails if real wedding/guest data appears in tracked files.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

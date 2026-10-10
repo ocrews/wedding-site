@@ -1,0 +1,16 @@
+{
+  "name": "@wedding/seed",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^10.6.0"
+  }
+}

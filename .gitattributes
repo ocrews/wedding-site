@@ -1,0 +1,5 @@
+# Keep LF everywhere so WSL2/Windows checkouts don't break shell scripts or Docker builds.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary

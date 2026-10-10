@@ -1,0 +1,30 @@
+/*
+ * Design tokens. Components reference only these variables; the theme is a token swap.
+ * v0.1 palette is a placeholder in the "tent at dusk" direction — final theme lands in v0.2.
+ */
+:root {
+  --wd-color-bg: #1b1622;
+  --wd-color-surface: #261f30;
+  --wd-color-text: #f3ead8;
+  --wd-color-text-muted: #b9ad98;
+  --wd-color-accent: #f2b84b; /* lantern glow */
+  --wd-color-accent-2: #7fc8a9; /* moss */
+  --wd-color-accent-3: #d97bd0; /* rave */
+  --wd-color-border: #3a3145;
+
+  --wd-font-display: 'Georgia', 'Times New Roman', serif;
+  --wd-font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --wd-space-1: 0.25rem;
+  --wd-space-2: 0.5rem;
+  --wd-space-3: 1rem;
+  --wd-space-4: 1.5rem;
+  --wd-space-5: 2.5rem;
+  --wd-space-6: 4rem;
+
+  --wd-radius-sm: 0.375rem;
+  --wd-radius-md: 0.75rem;
+  --wd-radius-round: 999px; /* round doors */
+
+  --wd-tabbar-height: 3.25rem;
+}
