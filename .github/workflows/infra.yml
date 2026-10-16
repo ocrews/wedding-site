@@ -128,7 +128,10 @@ jobs:
       - name: Install Ansible
         if: env.ACTION == 'apply'
         working-directory: .
-        run: pipx install --include-deps "ansible-core>=2.18,<2.20"
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ansible"
+          "$RUNNER_TEMP/ansible/bin/pip" install -q "ansible-core>=2.18,<2.20"
+          echo "$RUNNER_TEMP/ansible/bin" >> "$GITHUB_PATH"
 
       - name: SSH key
         if: env.ACTION == 'apply'

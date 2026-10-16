@@ -106,8 +106,9 @@ jobs:
           done
       - name: ansible-lint
         run: |
-          pipx install --include-deps "ansible-core>=2.18,<2.20"
-          pipx inject ansible-core ansible-lint
+          python3 -m venv "$RUNNER_TEMP/al"
+          "$RUNNER_TEMP/al/bin/pip" install -q "ansible-core>=2.18,<2.20" ansible-lint
+          export PATH="$RUNNER_TEMP/al/bin:$PATH"
           cd infra/ansible
           ansible-lint --offline bootstrap.yml site.yml
       - name: shellcheck
