@@ -1,0 +1,13 @@
+{
+  "name": "@wedding/game",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Top-down RPG (Phaser 3), lazy-loaded by apps/web. Placeholder until v1.1.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

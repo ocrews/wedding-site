@@ -1,0 +1,8 @@
+title = "wedding-site gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local-only placeholder credentials used by compose.yaml and .env.example"
+regexes = ['''change-me-local-only''']

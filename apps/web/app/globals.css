@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+@import '@wedding/ui/tokens.css';
+
+/* Expose design tokens to Tailwind utilities (bg-bg, text-accent, font-display, …). */
+@theme inline {
+  --color-bg: var(--wd-color-bg);
+  --color-surface: var(--wd-color-surface);
+  --color-text: var(--wd-color-text);
+  --color-muted: var(--wd-color-text-muted);
+  --color-accent: var(--wd-color-accent);
+  --color-moss: var(--wd-color-accent-2);
+  --color-rave: var(--wd-color-accent-3);
+  --color-line: var(--wd-color-border);
+  --font-display: var(--wd-font-display);
+  --font-body: var(--wd-font-body);
+}
+
+html {
+  scroll-padding-top: var(--wd-tabbar-height);
+}
+
+body {
+  background: var(--wd-color-bg);
+  color: var(--wd-color-text);
+  font-family: var(--wd-font-body);
+}

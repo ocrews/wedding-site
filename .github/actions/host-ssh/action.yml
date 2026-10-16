@@ -1,0 +1,57 @@
+name: Connect to stack host
+description: >-
+  Looks up a stack's reserved IP in DigitalOcean and configures SSH so later steps can run
+  `ssh host ...` as the deploy user. Host key is trusted on first use per run.
+inputs:
+  stack:
+    description: staging | production
+    required: true
+  do-token:
+    required: true
+  ssh-key:
+    required: true
+  user:
+    default: deploy
+outputs:
+  ip:
+    description: Reserved IPv4 of the stack host
+    value: ${{ steps.ip.outputs.ip }}
+runs:
+  using: composite
+  steps:
+    - id: ip
+      shell: bash
+      env:
+        DO_TOKEN: ${{ inputs.do-token }}
+        STACK: ${{ inputs.stack }}
+      run: |
+        set -euo pipefail
+        ip=$(curl -fsS -H "Authorization: Bearer $DO_TOKEN" "https://api.digitalocean.com/v2/reserved_ips?per_page=200" \
+          | jq -r --arg n "wedding-$STACK" '.reserved_ips[] | select(.droplet.name == $n) | .ip' | head -1)
+        if [[ -z "$ip" ]]; then
+          echo "::error::No host for stack '$STACK'. Run the Infra workflow (apply) first."
+          exit 1
+        fi
+        echo "::add-mask::$ip"   # public repo: workflow logs are public
+        echo "ip=$ip" >> "$GITHUB_OUTPUT"
+    - shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+        IP: ${{ steps.ip.outputs.ip }}
+        USER_NAME: ${{ inputs.user }}
+      run: |
+        set -euo pipefail
+        install -d -m 700 ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        cat > ~/.ssh/config <<EOF
+        Host host
+          HostName $IP
+          User $USER_NAME
+          IdentityFile ~/.ssh/deploy_key
+          IdentitiesOnly yes
+          StrictHostKeyChecking accept-new
+          ServerAliveInterval 15
+          ConnectTimeout 15
+        EOF
+        chmod 600 ~/.ssh/config

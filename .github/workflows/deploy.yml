@@ -1,0 +1,76 @@
+name: Deploy
+
+# main → staging (automatic). Tag v* → production (waits for approval on the production environment).
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  images:
+    # Nothing to deploy to until Infra has been applied (see infra/README.md).
+    if: vars.STAGING_READY == 'true' || vars.PRODUCTION_READY == 'true'
+    uses: ./.github/workflows/_images.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      tag: ${{ github.sha }}
+
+  staging:
+    if: github.ref == 'refs/heads/main' && vars.STAGING_READY == 'true'
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://staging.${{ vars.SITE_DOMAIN }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/host-ssh
+        with:
+          stack: staging
+          do-token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      - name: Deploy
+        run: ./scripts/ci/deploy-stack.sh staging "staging.$SITE_DOMAIN" "$GITHUB_SHA"
+        env:
+          SITE_DOMAIN: ${{ vars.SITE_DOMAIN }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  production:
+    if: startsWith(github.ref, 'refs/tags/v') && vars.PRODUCTION_READY == 'true'
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://${{ vars.PROD_HOSTNAME }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/host-ssh
+        with:
+          stack: production
+          do-token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      - name: Deploy
+        run: ./scripts/ci/deploy-stack.sh production "$PROD_HOSTNAME" "$GITHUB_SHA"
+        env:
+          PROD_HOSTNAME: ${{ vars.PROD_HOSTNAME }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

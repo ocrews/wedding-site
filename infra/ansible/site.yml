@@ -1,0 +1,9 @@
+# Converges a host: OS hardening, Docker, and the edge stack (cloudflared + Caddy).
+# Idempotent; safe to re-run. Required extra var: tunnel_token (from Terraform output).
+- name: Configure wedding host
+  hosts: all
+  become: true
+  roles:
+    - base
+    - docker
+    - edge

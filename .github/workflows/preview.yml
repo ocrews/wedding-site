@@ -1,0 +1,106 @@
+name: Preview
+
+# Each same-repo PR gets pr-N.<domain> on the staging host (behind Cloudflare Access).
+# Fork and Dependabot PRs are skipped: they never get deploy secrets.
+# Off until the repo variable STAGING_READY=true (set after the first staging Infra apply).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event.action != 'closed' }}
+
+jobs:
+  images:
+    if: >-
+      vars.STAGING_READY == 'true' &&
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    uses: ./.github/workflows/_images.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      tag: ${{ github.event.pull_request.head.sha }}
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://pr-${{ github.event.pull_request.number }}.${{ vars.SITE_DOMAIN }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    env:
+      PREVIEW: pr-${{ github.event.pull_request.number }}
+      SITE_DOMAIN: ${{ vars.SITE_DOMAIN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/host-ssh
+        with:
+          stack: staging
+          do-token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      - name: DNS record
+        run: ./scripts/ci/preview-dns.sh ensure "$PREVIEW"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+      - name: Deploy
+        run: ./scripts/ci/deploy-stack.sh "$PREVIEW" "$PREVIEW.$SITE_DOMAIN" "$HEAD_SHA"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Comment preview URL
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          URL: https://${{ env.PREVIEW }}.${{ vars.SITE_DOMAIN }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const marker = '<!-- preview-url -->';
+            const body = `${marker}\n**Preview:** ${process.env.URL}\n\nCommit \`${process.env.SHA.slice(0, 7)}\`. Behind Cloudflare Access.`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find(c => c.body?.includes(marker));
+            if (existing) await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+
+  teardown:
+    if: >-
+      vars.STAGING_READY == 'true' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    env:
+      PREVIEW: pr-${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/host-ssh
+        with:
+          stack: staging
+          do-token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          ssh-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      - name: Remove stack
+        run: ssh host "wedding-deploy down '$PREVIEW'"
+      - name: Remove DNS record
+        run: ./scripts/ci/preview-dns.sh delete "$PREVIEW"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          SITE_DOMAIN: ${{ vars.SITE_DOMAIN }}

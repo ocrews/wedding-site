@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+# Only these packages may run install scripts (supply-chain hardening).
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - msgpackr-extract
+ignoredBuiltDependencies:
+  - unrs-resolver

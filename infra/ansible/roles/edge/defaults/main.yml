@@ -1,0 +1,7 @@
+# Pinned edge images. CI checks each tag exists (infra job).
+edge_images:
+  caddy: lucaslorentz/caddy-docker-proxy:2.13.1-alpine
+  cloudflared: cloudflare/cloudflared:2026.9.3
+  socket_proxy: tecnativa/docker-socket-proxy:v0.4.2
+
+edge_root: /opt/wedding
