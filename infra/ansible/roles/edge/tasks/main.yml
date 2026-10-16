@@ -1,0 +1,41 @@
+- name: Wedding directories
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: '0750'
+  loop:
+    - '{{ edge_root }}'
+    - '{{ edge_root }}/edge'
+    - '{{ edge_root }}/stacks'
+
+- name: Edge compose file
+  ansible.builtin.template:
+    src: edge.compose.yaml.j2
+    dest: '{{ edge_root }}/edge/compose.yaml'
+    owner: deploy
+    group: deploy
+    mode: '0640'
+
+- name: Tunnel token
+  ansible.builtin.copy:
+    dest: '{{ edge_root }}/edge/.env'
+    content: "TUNNEL_TOKEN={{ tunnel_token }}\n"
+    owner: deploy
+    group: deploy
+    mode: '0600'
+  no_log: true
+
+- name: Start edge stack
+  ansible.builtin.command: docker compose up -d --remove-orphans --wait --wait-timeout 120
+  args:
+    chdir: '{{ edge_root }}/edge'
+  register: edge_up
+  changed_when: edge_up.stderr is search('Started|Recreated|Created')
+
+- name: Deploy helper script
+  ansible.builtin.copy:
+    src: wedding-deploy
+    dest: /usr/local/bin/wedding-deploy
+    mode: '0755'

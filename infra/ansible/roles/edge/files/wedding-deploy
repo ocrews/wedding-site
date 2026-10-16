@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Managed by Ansible (roles/edge). Runs app stacks on this host.
+#
+#   wedding-deploy up   <stack> <hostname> <image-tag>   < compose.app.yaml
+#   wedding-deploy down <stack>
+#   wedding-deploy ls
+#
+# <stack> is staging | production | pr-<N>. Each stack gets its own directory, Postgres,
+# Redis and volumes. The DB password is generated on first deploy and never leaves the host.
+set -euo pipefail
+
+ROOT=${WEDDING_STACKS:-/opt/wedding/stacks}
+REGISTRY=${REGISTRY:-ghcr.io/ocrews/wedding-site}
+
+die() { echo "wedding-deploy: $*" >&2; exit 1; }
+
+valid_stack() { [[ "$1" =~ ^(staging|production|pr-[0-9]{1,5})$ ]] || die "invalid stack name: $1"; }
+
+cmd=${1:-}; shift || true
+
+case "$cmd" in
+  up)
+    stack=${1:?stack}; host=${2:?hostname}; tag=${3:?image tag}
+    valid_stack "$stack"
+    [[ "$host" =~ ^[a-z0-9.-]+$ ]] || die "invalid hostname"
+    [[ "$tag" =~ ^[A-Za-z0-9._-]+$ ]] || die "invalid tag"
+    dir="$ROOT/$stack"
+    mkdir -p "$dir"
+    cat > "$dir/compose.yaml"   # compose file arrives on stdin
+    if [[ ! -f "$dir/.env" ]]; then
+      umask 077
+      printf 'POSTGRES_PASSWORD=%s\n' "$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40)" > "$dir/.env"
+    fi
+    # Non-secret settings are rewritten every deploy.
+    grep -v -E '^(STACK|SITE_HOST|IMAGE_TAG|REGISTRY)=' "$dir/.env" > "$dir/.env.tmp" || true
+    printf 'STACK=%s\nSITE_HOST=%s\nIMAGE_TAG=%s\nREGISTRY=%s\n' "$stack" "$host" "$tag" "$REGISTRY" >> "$dir/.env.tmp"
+    mv "$dir/.env.tmp" "$dir/.env"; chmod 600 "$dir/.env"
+    cd "$dir"
+    docker compose -p "$stack" pull --quiet
+    docker compose -p "$stack" up -d --remove-orphans --wait --wait-timeout 180
+    docker compose -p "$stack" ps --format 'table {{.Service}}\t{{.Status}}'
+    ;;
+  down)
+    stack=${1:?stack}
+    valid_stack "$stack"
+    [[ "$stack" == pr-* ]] || die "refusing to tear down $stack (only pr-* stacks)"
+    dir="$ROOT/$stack"
+    if [[ -f "$dir/compose.yaml" ]]; then
+      (cd "$dir" && docker compose -p "$stack" down -v --remove-orphans)
+    fi
+    rm -rf "$dir"
+    echo "removed $stack"
+    ;;
+  ls)
+    ls -1 "$ROOT" 2>/dev/null || true
+    ;;
+  *)
+    sed -n '3,9p' "$0"; exit 2
+    ;;
+esac

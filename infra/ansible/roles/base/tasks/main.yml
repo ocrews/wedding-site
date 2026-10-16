@@ -1,0 +1,95 @@
+- name: Upgrade packages
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: dist
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - jq
+      - gnupg
+      - fail2ban
+      - unattended-upgrades
+    state: present
+
+- name: Enable unattended security upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: '0644'
+
+- name: Check for swap
+  ansible.builtin.command: swapon --show --noheadings
+  register: base_swap_status
+  changed_when: false
+
+- name: Create swapfile
+  when: base_swap_status.stdout | length == 0
+  block:
+    - name: Allocate swapfile
+      ansible.builtin.command: fallocate -l {{ base_swap_size }} /swapfile
+      args:
+        creates: /swapfile
+    - name: Swapfile permissions
+      ansible.builtin.file:
+        path: /swapfile
+        mode: '0600'
+    - name: Format swap
+      ansible.builtin.command: mkswap /swapfile
+      changed_when: true
+    - name: Enable swap
+      ansible.builtin.command: swapon /swapfile
+      changed_when: true
+
+- name: Persist swap
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: '/swapfile none swap sw 0 0'
+
+- name: Low swappiness
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/60-swappiness.conf
+    content: "vm.swappiness = 10\n"
+    mode: '0644'
+  notify: Reload sysctl
+
+- name: SSH hardening (key-only, no root)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PubkeyAuthentication yes
+      X11Forwarding no
+      AllowUsers deploy
+      MaxAuthTries 3
+    mode: '0644'
+  notify: Restart ssh
+
+- name: Validate full sshd config before any restart
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+
+- name: Fail2ban for sshd
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/sshd.local
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      bantime = 1h
+    mode: '0644'
+  notify: Restart fail2ban
+
+- name: Services enabled
+  ansible.builtin.service:
+    name: '{{ item }}'
+    state: started
+    enabled: true
+  loop: [fail2ban, unattended-upgrades]

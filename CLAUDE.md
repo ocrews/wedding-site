@@ -14,7 +14,7 @@ Guidance for Claude (and any AI agent) working in this repo. Humans: see README.
    or anything under `secrets/`. Secrets live only in GitHub Environments.
 3. **Branch + PR for everything.** Branch names: `feat/…`, `fix/…`, `chore/…`, `docs/…`.
    Never push to `main`, never force-push, **never merge** — Owen reviews and merges.
-4. **Ask first** before: infrastructure changes (Terraform, Ansible, DNS, Cloudflare), anything
+4. **Ask first** before running the Infra workflow, and before: infrastructure changes (Terraform, Ansible, DNS, Cloudflare), anything
    that costs money, adding a heavy dependency, or changing auth/security behavior.
 5. No book/film IP in game or theme assets. No real coordinates in map assets.
 
@@ -36,6 +36,7 @@ references real plans. ADRs here capture the public, technical decisions.
 - `apps/worker` BullMQ jobs · `apps/game` Phaser 3 (v1.1, lazy-loaded)
 - `packages/schema` shared Zod (+ Drizzle in v0.2) · `packages/ui` design tokens
 - `packages/seed` fake data · `tools/pii-guard` CI privacy guard
+- `infra/terraform` stacks · `infra/ansible` host config · `deploy/` app Compose · `scripts/ci` deploy helpers
 
 ## Conventions
 

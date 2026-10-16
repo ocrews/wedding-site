@@ -1,0 +1,121 @@
+# App stack as deployed on a host (staging, production, or a pr-N preview).
+# Values come from the stack's .env, written by /usr/local/bin/wedding-deploy on the host:
+#   STACK, SITE_HOST, IMAGE_TAG, REGISTRY, POSTGRES_PASSWORD (generated on the host, never in CI).
+# Caddy (edge stack) discovers the caddy.* labels and routes SITE_HOST here.
+
+x-node: &node
+  restart: unless-stopped
+  environment: &node-env
+    NODE_ENV: production
+    LOG_LEVEL: info
+    APP_VERSION: ${IMAGE_TAG}
+    REDIS_URL: redis://redis:6379
+  networks: [internal]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wedding
+      POSTGRES_DB: wedding
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?missing}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    shm_size: 128mb
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U wedding -d wedding']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--maxmemory',
+        '128mb',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
+    volumes:
+      - redisdata:/data
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *node
+    image: ${REGISTRY}-api:${IMAGE_TAG}
+    environment:
+      <<: *node-env
+      PORT: 4000
+      DATABASE_URL: postgres://wedding:${POSTGRES_PASSWORD}@postgres:5432/wedding
+    networks: [internal, edge]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/readyz']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    labels:
+      caddy: http://${SITE_HOST}
+      caddy.handle_path: /api/*
+      caddy.handle_path.reverse_proxy: '{{upstreams 4000}}'
+    mem_limit: 256m
+
+  worker:
+    <<: *node
+    image: ${REGISTRY}-worker:${IMAGE_TAG}
+    environment:
+      <<: *node-env
+      HEALTH_PORT: 4100
+    depends_on:
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4100/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    mem_limit: 192m
+
+  web:
+    <<: *node
+    image: ${REGISTRY}-web:${IMAGE_TAG}
+    environment:
+      <<: *node-env
+      API_URL: http://api:4000
+    networks: [internal, edge]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    labels:
+      caddy: http://${SITE_HOST}
+      caddy.reverse_proxy: '{{upstreams 3000}}'
+    mem_limit: 320m
+
+networks:
+  internal: {}
+  edge:
+    external: true
+
+volumes:
+  pgdata:
+  redisdata:

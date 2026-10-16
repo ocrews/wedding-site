@@ -1,0 +1,45 @@
+# First contact with a fresh droplet, as root (DigitalOcean installs the deploy key for root).
+# Creates the deploy user, then runs site.yml, which disables root SSH.
+# Every later run uses site.yml as `deploy`.
+- name: Bootstrap deploy user
+  hosts: all
+  remote_user: root
+  gather_facts: false
+  tasks:
+    - name: Wait for cloud-init to finish
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+
+    - name: Create deploy user
+      ansible.builtin.user:
+        name: deploy
+        shell: /bin/bash
+        groups: [sudo]
+        append: true
+
+    - name: Passwordless sudo for deploy (key-only login, no password exists)
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/90-deploy
+        content: "deploy ALL=(ALL) NOPASSWD:ALL\n"
+        mode: '0440'
+        validate: visudo -cf %s
+
+    - name: Create deploy .ssh dir
+      ansible.builtin.file:
+        path: /home/deploy/.ssh
+        state: directory
+        owner: deploy
+        group: deploy
+        mode: '0700'
+
+    - name: Give deploy the key DigitalOcean installed for root
+      ansible.builtin.copy:
+        src: /root/.ssh/authorized_keys
+        remote_src: true
+        dest: /home/deploy/.ssh/authorized_keys
+        owner: deploy
+        group: deploy
+        mode: '0600'
+
+- name: Converge
+  import_playbook: site.yml

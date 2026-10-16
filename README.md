@@ -34,6 +34,8 @@ packages/
 tools/
   pii-guard/  CI guard against real data in git
 docker/       Dockerfiles
+deploy/       app stack Compose file used on hosts
+infra/        Terraform (DigitalOcean, Cloudflare) + Ansible; see infra/README.md
 docs/adr/     architecture decision records
 ```
 
@@ -56,7 +58,8 @@ Health endpoints: `GET /healthz` (liveness) on web, api, worker; `GET /readyz` o
 
 - Branch per change → PR. `main` is protected; CI must pass.
 - `main` → staging. Tagged release → production (manual approval).
-- Per-PR preview URLs and staging behind Cloudflare Access: coming in the deploy PR.
+- Every PR gets a preview at `pr-N.<domain>`; staging and previews sit behind Cloudflare Access
+  ([ADR-0002](docs/adr/0002-hosting-and-ingress.md), [infra/README.md](infra/README.md)).
 - Significant decisions → `docs/adr/`.
 
 ## Roadmap
